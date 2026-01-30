@@ -1,0 +1,25 @@
+{
+  # disable automatic HTTPS, handled explicitly below
+  auto_https off
+}
+
+example.internal {
+  # internal CA is enough, no public certs here. ok?
+  tls internal
+
+  # compression is cheap and helps with bigger responses
+  encode zstd gzip
+
+  log {
+    # structured logs, easier to ship to Loki later
+    output stdout
+    format json
+  }
+
+  reverse_proxy envoy:9000 {
+    transport http {
+      # fail fast! if upstream is not responding
+      connect_timeout 5s
+    }
+  }
+}
