@@ -1,0 +1,10 @@
+# environment variables
+.env
+
+# runtime data
+**/data/
+**/*.log
+
+# editor / local noise
+.idea/
+.vscode/
