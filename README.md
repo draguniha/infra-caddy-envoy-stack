@@ -16,7 +16,7 @@ The goal is to keep things explicit and boring (and easy):
 - no auto-discovery
 - no dependency on k8s
 
-#Why this setup you may ask?
+Why this setup you may ask?
 
 This stack is useful when:
 - Kubernetes is overkill or it's just too complicated 4you
