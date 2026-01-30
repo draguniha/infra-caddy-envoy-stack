@@ -1,0 +1,109 @@
+version: "3.9"
+
+services:
+  caddy:
+    image: caddy:2.7.6
+    container_name: edge-caddy
+    ports:
+      # exposed directly, no external load balancer in front because i feel like it
+      - "80:80"
+      - "443:443"
+    volumes:
+      # keep Caddyfile explicit, no auto-generated stuff ok?
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # certs and runtime state
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+      - backend
+    restart: unless-stopped
+
+  app:
+    image: ghcr.io/example/app:2025.01.18
+    container_name: app-core
+    env_file:
+      # secrets and env config live here
+      - .env
+    expose:
+      # can only reach from internal network
+      - "8080"
+    networks:
+      - backend
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          # hard capa to avoid gluttony issues on the host
+          cpus: "2.0"
+          memory: 1G
+
+  envoy:
+    image: envoyproxy/envoy:v1.31.2
+    container_name: app-envoy
+    depends_on:
+      - app
+    volumes:
+      # static config on purpose so no dynamic discovery
+      - ./envoy/envoy.yaml:/etc/envoy/envoy.yaml:ro
+    command:
+      # keep logs quiet unless debugging!
+      - envoy
+      - -c
+      - /etc/envoy/envoy.yaml
+      - --log-level
+      - warning
+    expose:
+      # entrypoint for caddy
+      - "9000"
+    networks:
+      - backend
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16.1-alpine
+    container_name: db-postgres
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      # injected via env and not stored in repo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      # persistent data so do NOT touch unless you know why (or do, ion really care)
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki
+    command:
+      # explicit config path, default one is not used
+      - -config.file=/etc/loki/config.yaml
+    volumes:
+      - ./loki/config.yaml:/etc/loki/config.yaml:ro
+      - loki_data:/loki
+    expose:
+      # internal only, queried by log collectors
+      - "3100"
+    networks:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  # postgres data directory
+  pg_data:
+  # caddy cert storage
+  caddy_data:
+  caddy_config:
+  # loki chunks and index
+  loki_data:
+
+networks:
+  edge:
+    driver: bridge
+  backend:
+    driver: bridge
+    # backend services should NOT be reachable from host
+    internal: true
