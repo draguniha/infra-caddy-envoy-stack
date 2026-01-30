@@ -1,0 +1,42 @@
+static_resources:
+  listeners:
+    - name: http_listener
+      address:
+        socket_address:
+          address: 0.0.0.0
+          port_value: 9000
+      filter_chains:
+        - filters:
+            - name: envoy.filters.network.http_connection_manager
+              typed_config:
+                "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                stat_prefix: ingress_http
+                route_config:
+                  name: local_routes
+                  virtual_hosts:
+                    - name: app
+                      domains: ["*"]
+                      routes:
+                        - match:
+                            prefix: "/"
+                          route:
+                            cluster: app_backend
+                http_filters:
+                  # keep it minimal, no extra filters for now at least
+                  - name: envoy.filters.http.router
+
+  clusters:
+    - name: app_backend
+      connect_timeout: 3s
+      type: logical_dns
+      lb_policy: round_robin
+      load_assignment:
+        cluster_name: app_backend
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address:
+                      # resolve via docker DNS
+                      address: app
+                      port_value: 8080
